@@ -1,24 +1,49 @@
-version: '3.5'
+version: '3'
+x-airflow-common:
+  &airflow-common
+  image: apache/airflow:2.1.2
+  environment:
+    - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+    - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://postgres:Isaac!07@190.92.148.12:5432/airflow
+    - AIRFLOW__CORE__LOAD_EXAMPLES=False
+    - AIRFLOW__CORE__LOGGING_LEVEL=INFO
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./airflow-data/logs:/opt/airflow/logs
+    - ./airflow-data/plugins:/opt/airflow/plugins
+    - ./airflow-data/airflow.cfg:/usr/local/airflow/airflow.cfg
+    - ./airflow-data/logs/scheduler:/opt/airflow/logs/scheduler
 
 services:
-  postgres:
-    container_name: postgres_container
-    image: postgres
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-yourpassword}
-      PGDATA: /data/postgres
-    volumes:
-       - postgres:/data/postgres
+
+  airflow-init:
+    << : *airflow-common
+    container_name: airflow_init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - airflow users list || ( airflow db init &&
+        airflow users create
+          --role Admin
+          --username eudesrodrigo
+          --password Isaac07
+          --email eudesrodrigo@outlook.com
+          --firstname Eudes
+          --lastname Oliveira )
+    restart: on-failure
+
+  airflow-webserver:
+    << : *airflow-common
+    command: airflow webserver
     ports:
-      - "5432:5432"
-    networks:
-      - postgres
-    restart: unless-stopped
+      - 8080:8080
+    container_name: airflow_webserver
+    volumes:
+      - ./airflow-data/logs:/opt/airflow/logs
+    restart: always
 
-networks:
-  postgres:
-    driver: bridge
-
-volumes:
-    postgres:
+  airflow-scheduler:
+    << : *airflow-common
+    command: airflow scheduler
+    container_name: airflow_scheduler
+    restart: always
